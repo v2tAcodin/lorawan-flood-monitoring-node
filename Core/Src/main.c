@@ -53,11 +53,15 @@
 #define SENSOR_MAX_PRESSURE 10.0f // Thang đo áp suất tối đa của cảm biến (Bar)
 #define ADC_SAMPLE_COUNT 16       // Số lần lấy mẫu trung bình để khử nhiễu
 
+// Hệ số quy đổi áp suất sang cột nước: 1 Bar = 1019.72 cm H2O (P = rho * g * h)
+#define BAR_TO_CM_WATER 1019.72f
+
 // Biến lưu trữ giá trị đo
 volatile uint32_t g_adc_raw = 0;
 volatile float g_voltage = 0.0f;
 volatile float g_pressure_bar = 0.0f;
 volatile float g_pressure_kpa = 0.0f;
+volatile float g_water_level_cm = 0.0f; // Mức nước tính bằng centimet (cm)
 
 char display_line[32];
 /* USER CODE END PV */
@@ -137,7 +141,7 @@ int main(void) {
     // --- BƯỚC 1: ĐỌC DỮ LIỆU TỪ CẢM BIẾN ---
     g_adc_raw = Read_ADC_Filtered();
 
-    // --- BƯỚC 2: TÍNH ĐIỆN ÁP & ÁP SUẤT ---
+    // --- BƯỚC 2: TÍNH ĐIỆN ÁP, ÁP SUẤT & MỨC NƯỚC (CM) ---
     // Điện áp thực tế tại chân PA0 (0V - 3.3V)
     g_voltage = ((float)g_adc_raw / 4095.0f) * 3.3f;
 
@@ -150,29 +154,32 @@ int main(void) {
     // Quy đổi thêm đơn vị kPa (1 Bar = 100 kPa)
     g_pressure_kpa = g_pressure_bar * 100.0f;
 
+    // Quy đổi áp suất thủy tĩnh sang chiều cao cột nước (cm): h = P / (rho * g)
+    g_water_level_cm = g_pressure_bar * BAR_TO_CM_WATER;
+
     // --- BƯỚC 3: HIỂN THỊ LÊN MÀN HÌNH OLED ---
     ssd1306_Fill(Black); // Xóa bộ đệm màn hình
 
     // Dòng 1: Tiêu đề giao diện
-    ssd1306_SetCursor(15, 2);
-    ssd1306_WriteString("PRESSURE METER", Font_7x10, White);
+    ssd1306_SetCursor(25, 2);
+    ssd1306_WriteString("WATER LEVEL", Font_7x10, White);
 
     // Kẻ một đường ngang phân cách tiêu đề
     ssd1306_DrawLine(0, 14, 127, 14, White);
 
-    // Dòng 2: Hiển thị giá trị áp suất cỡ chữ lớn (Font 11x18)
-    sprintf(display_line, "%.2f Bar", g_pressure_bar);
-    ssd1306_SetCursor(18, 20);
+    // Dòng 2: Hiển thị giá trị mức nước cỡ chữ lớn (Font 11x18)
+    sprintf(display_line, "%.1f cm", g_water_level_cm);
+    ssd1306_SetCursor(20, 18);
     ssd1306_WriteString(display_line, Font_11x18, White);
 
-    // Dòng 3: Hiển thị áp suất quy đổi sang kPa
-    sprintf(display_line, "P:  %.1f kPa", g_pressure_kpa);
-    ssd1306_SetCursor(5, 42);
+    // Dòng 3: Hiển thị áp suất tương ứng
+    sprintf(display_line, "P:  %.2f Bar", g_pressure_bar);
+    ssd1306_SetCursor(5, 40);
     ssd1306_WriteString(display_line, Font_7x10, White);
 
     // Dòng 4: Hiển thị điện áp ngõ vào tại chân PA0
     sprintf(display_line, "Vin: %.2f V", g_voltage);
-    ssd1306_SetCursor(5, 54);
+    ssd1306_SetCursor(5, 52);
     ssd1306_WriteString(display_line, Font_7x10, White);
 
     // LỆNH QUAN TRỌNG: Cập nhật toàn bộ khung hình ra màn hình vật lý
